@@ -1,34 +1,15 @@
-const API_URL = import.meta.env.VITE_ANILIST_API_URL || 'https://graphql.anilist.co';
-
-export async function anilistRequest(query, variables = {}, signal) {
-  const response = await fetch(API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({ query, variables }),
-    signal,
-  });
-  if (!response.ok) throw new Error(`AniList request failed (${response.status})`);
-  const payload = await response.json();
-  if (payload.errors?.length) throw new Error(payload.errors.map((error) => error.message).join('; '));
-  return payload.data;
-}
-
-const SEARCH_QUERY = `query ($search: String, $page: Int, $perPage: Int) { Page(page: $page, perPage: $perPage) { media(search: $search, type: ANIME, sort: POPULARITY_DESC) { id idMal title { english romaji native } description(asHtml: false) coverImage { extraLarge large color } bannerImage genres averageScore episodes seasonYear format status siteUrl } } }`;
-const TRENDING_QUERY = `query ($page: Int, $perPage: Int) { Page(page: $page, perPage: $perPage) { media(type: ANIME, sort: TRENDING_DESC) { id idMal title { english romaji native } description(asHtml: false) coverImage { extraLarge large color } bannerImage genres averageScore episodes seasonYear format status siteUrl } } }`;
-const DETAIL_QUERY = `query ($id: Int) { Media(id: $id, type: ANIME) { id idMal title { english romaji native } description(asHtml: false) coverImage { extraLarge large color } bannerImage genres averageScore meanScore popularity favourites episodes duration seasonYear season format status siteUrl startDate { year month day } endDate { year month day } studios(isMain: true) { nodes { name } } staff(perPage: 8, sort: RELEVANCE) { edges { role node { name { full } } } } characters(perPage: 8, sort: ROLE) { edges { role node { id name { full } image { large } } } } relations { edges { relationType(version: 2) node { id title { english romaji } coverImage { large } type format } } } recommendations(perPage: 8, sort: RATING) { nodes { mediaRecommendation { id title { english romaji } coverImage { large } averageScore } } } } }`;
-
-export async function searchAnime(search, { page = 1, perPage = 20, signal } = {}) {
-  const data = await anilistRequest(SEARCH_QUERY, { search, page, perPage }, signal);
-  return data.Page.media;
-}
-export async function getTrendingAnime({ page = 1, perPage = 20, signal } = {}) {
-  const data = await anilistRequest(TRENDING_QUERY, { page, perPage }, signal);
-  return data.Page.media;
-}
-export async function getAnimeDetails(id, signal) {
-  const data = await anilistRequest(DETAIL_QUERY, { id: Number(id) }, signal);
-  return data.Media;
-}
-export function displayTitle(media) {
-  return media?.title?.english || media?.title?.romaji || media?.title?.native || 'Untitled anime';
-}
+import { MOCK_ANIME } from './mockData.js';
+import { consolidateAnimeList, getFranchiseSeasons } from '../utils/animeGrouping.js';
+const API_URL=import.meta.env.VITE_ANILIST_API_URL||'https://graphql.anilist.co';
+const cache=new Map();const TTL=15*60*1000;
+async function fetchAniList(query,variables={}){const key=JSON.stringify({query,variables});const old=cache.get(key);if(old&&Date.now()-old.at<TTL)return old.data;try{const response=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({query,variables})});if(!response.ok)throw new Error(`AniList HTTP ${response.status}`);const json=await response.json();if(json.errors?.length)throw new Error(json.errors[0]?.message||'AniList error');cache.set(key,{at:Date.now(),data:json.data});return json.data;}catch(error){console.warn('AniList request failed:',error.message);return null;}}
+export function normalizeAniListMedia(m){if(!m)return null;const cover=m.coverImage?.extraLarge||m.coverImage?.large||'';return {id:String(m.id),malId:m.idMal||null,title:{english:m.title?.english||m.title?.romaji||'Unknown Title',romaji:m.title?.romaji||m.title?.english||'',native:m.title?.native||''},description:m.description||'',synopsis:(m.description||'').replace(/<[^>]*>/g,' '),coverImage:{large:cover,extraLarge:cover},bannerImage:m.bannerImage||cover,genres:m.genres||[],averageScore:m.averageScore||null,rating:m.averageScore?Number((m.averageScore/10).toFixed(1)):null,format:m.format||'TV',status:m.status||'FINISHED',episodes:m.episodes||12,season:m.season||null,seasonYear:m.seasonYear||null,year:m.seasonYear||null,duration:m.duration||24,studio:m.studios?.nodes?.[0]?.name||'Unknown studio',source:m.source||null,startDate:m.startDate||null,endDate:m.endDate||null,relations:m.relations?.edges||[],characters:m.characters?.edges||[],staff:m.staff?.edges||[],recommendations:m.recommendations?.nodes||[],siteUrl:m.siteUrl||null};}
+const FRAGMENT=`id idMal title { english romaji native } description(asHtml:false) coverImage { large extraLarge } bannerImage genres averageScore format status episodes season seasonYear duration source startDate { year month day } endDate { year month day } studios(isMain:true) { nodes { name } }`;
+async function list(query,variables,fallback){const data=await fetchAniList(query,variables);const media=data?.Page?.media;if(media?.length)return consolidateAnimeList(media.map(normalizeAniListMedia));return consolidateAnimeList(fallback||MOCK_ANIME);}
+export async function getTrendingAnime(perPage=12){const q=`query($perPage:Int){Page(page:1,perPage:$perPage){media(sort:TRENDING_DESC,type:ANIME,isAdult:false){${FRAGMENT}}}}`;const rows=await list(q,{perPage:Math.max(perPage*2,perPage)},MOCK_ANIME);return rows.slice(0,perPage).map((x,i)=>({...x,rank:i+1,isTrending:true}));}
+export async function getPopularAnime(perPage=18){const q=`query($perPage:Int){Page(page:1,perPage:$perPage){media(sort:POPULARITY_DESC,type:ANIME,isAdult:false){${FRAGMENT}}}}`;return (await list(q,{perPage:perPage*2},MOCK_ANIME)).slice(0,perPage);}
+export async function getTopRatedAnime(perPage=18){const q=`query($perPage:Int){Page(page:1,perPage:$perPage){media(sort:SCORE_DESC,type:ANIME,isAdult:false,averageScore_greater:70){${FRAGMENT}}}}`;return (await list(q,{perPage:perPage*2},MOCK_ANIME)).slice(0,perPage);}
+export async function searchAnime(searchOrOptions='',options={}){let query=searchOrOptions;let opts=options;if(typeof searchOrOptions==='object'&&searchOrOptions!==null){opts=searchOrOptions;query=opts.search||'';}const page=opts.page||1,perPage=opts.perPage||24;const gql=`query($search:String,$page:Int,$perPage:Int){Page(page:$page,perPage:$perPage){media(search:$search,type:ANIME,sort:POPULARITY_DESC,isAdult:false){${FRAGMENT}}}}`;const data=await fetchAniList(gql,{search:query||null,page,perPage});if(data?.Page?.media){let rows=data.Page.media.map(normalizeAniListMedia);if(opts.genre)rows=rows.filter(a=>a.genres.includes(opts.genre));if(opts.format)rows=rows.filter(a=>a.format===opts.format);if(opts.status)rows=rows.filter(a=>a.status===opts.status);if(opts.year)rows=rows.filter(a=>String(a.seasonYear)===String(opts.year));if(opts.season)rows=rows.filter(a=>a.season===opts.season);return consolidateAnimeList(rows);}const rows=MOCK_ANIME.filter(a=>!query||a.title.english.toLowerCase().includes(String(query).toLowerCase()));return consolidateAnimeList(rows).slice((page-1)*perPage,page*perPage);}
+export async function getAnimeById(id){const q=`query($id:Int){Media(id:$id,type:ANIME){${FRAGMENT} relations { edges { relationType(version:2) node { id title { english romaji } coverImage { large } type format } } } staff(perPage:8,sort:RELEVANCE){edges{role node{name{full}}}} characters(perPage:8,sort:ROLE){edges{role node{id name{full} image{large}}}} recommendations(perPage:8,sort:RATING){nodes{mediaRecommendation{id title{english romaji} coverImage{large} averageScore}}}}}`;const data=await fetchAniList(q,{id:Number(id)});if(data?.Media)return normalizeAniListMedia(data.Media);const mock=MOCK_ANIME.find(a=>String(a.id)===String(id));if(mock)return mock;throw new Error('Anime details are unavailable. Please try again.');}
+export const getAnimeDetails=getAnimeById;
+export async function getFranchiseAnime(id){const anime=await getAnimeById(id);return getFranchiseSeasons(anime,MOCK_ANIME);}
