@@ -1,3 +1,4 @@
 import { Link } from 'react-router-dom';
-import { MessageSquare } from 'lucide-react';
-export default function Reviews() { return <main className="simple-page"><MessageSquare size={36} /><h1>Community Reviews</h1><p>Explore reviews from anime fans on individual anime pages.</p><Link to="/search">Discover anime</Link></main>; }
+import { useReviews } from '../context/ReviewsContext.jsx';
+import ReviewCard from '../components/ReviewCard.jsx';
+export default function Reviews(){const {reviews,loading}=useReviews();return <main className="reviews-page"><header><p className="eyebrow">COMMUNITY</p><h1>Anime reviews</h1><p>Thoughts and recommendations from anime fans.</p></header>{loading?<p>Loading reviews…</p>:reviews.length?<div className="reviews-list">{reviews.map(review=><ReviewCard key={review.id} review={review}/>)}</div>:<div className="continue-empty"><p>No reviews published yet.</p><Link to="/search">Explore anime and write a review</Link></div>}</main>;}
