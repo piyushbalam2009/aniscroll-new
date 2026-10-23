@@ -1,4 +1,4 @@
-# Anistra
+# AniScroll
 
 Anime discovery and tracking app built with React and Vite.
 
