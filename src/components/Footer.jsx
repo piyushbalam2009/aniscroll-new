@@ -1,0 +1,2 @@
+import { Link } from 'react-router-dom';
+export default function Footer(){return <footer className="site-footer"><div><Link className="brand-mark" to="/">ANISTRA</Link><p>Your anime universe: discover, track, and share.</p></div><nav><Link to="/search">Explore</Link><Link to="/my-list">My list</Link><Link to="/reviews">Reviews</Link><Link to="/privacy">Privacy</Link><Link to="/terms">Terms</Link></nav><small>Anime metadata provided by AniList and Jikan. Anistra is a fan project.</small></footer>;}
