@@ -3,4 +3,18 @@ import { Link } from 'react-router-dom';
 import AnimeCard from '../components/AnimeCard.jsx';
 import { useWatchlist } from '../context/WatchlistContext.jsx';
 import EmptyState from '../components/EmptyState.jsx';
-export default function MyList(){const {watchlist,updateWatchlistStatus}=useWatchlist();const [filter,setFilter]=useState('All');const statuses=['All','Watching','Completed','Plan to Watch','Dropped'];const rows=watchlist.filter(row=>filter==='All'||row.status===filter);return <main className="list-page"><header><p className="eyebrow">YOUR LIBRARY</p><h1>My anime list</h1><p>Keep your anime journey organised.</p></header><nav className="filter-tabs">{statuses.map(s=><button className={filter===s?'active':''} key={s} onClick={()=>setFilter(s)}>{s}</button>)}</nav>{rows.length?<div className="anime-grid">{rows.map(row=><div key={row.anime_id||row.id}><AnimeCard anime={row.anime||row}/><label className="status-picker">Status <select value={row.status||'Watching'} onChange={e=>updateWatchlistStatus(row.anime_id||row.id,e.target.value)}>{statuses.slice(1).map(s=><option key={s}>{s}</option>)}</select></label></div>)}</div>:<EmptyState type="list" title={filter==='All'?'Your list is empty':`No titles marked ${filter}`} actionLink="/search"/>}<p><Link to="/search">Discover more anime</Link></p></main>;
+
+export default function MyList() {
+  const { watchlist, updateWatchlistStatus } = useWatchlist();
+  const [filter, setFilter] = useState('All');
+  const statuses = ['All', 'Watching', 'Completed', 'Plan to Watch', 'Dropped'];
+  const rows = watchlist.filter(row => filter === 'All' || row.status === filter);
+  return (
+    <main className="list-page">
+      <header><p className="eyebrow">YOUR LIBRARY</p><h1>My anime list</h1><p>Keep your anime journey organised.</p></header>
+      <nav className="filter-tabs">{statuses.map(status => <button className={filter === status ? 'active' : ''} key={status} onClick={() => setFilter(status)}>{status}</button>)}</nav>
+      {rows.length ? <div className="anime-grid">{rows.map(row => <div key={row.anime_id || row.id}><AnimeCard anime={row.anime || row} /><label className="status-picker">Status <select value={row.status || 'Watching'} onChange={e => updateWatchlistStatus(row.anime_id || row.id, e.target.value)}>{statuses.slice(1).map(status => <option key={status} value={status}>{status}</option>)}</select></label></div>)}</div> : <EmptyState type="list" title={filter === 'All' ? 'Your list is empty' : `No titles marked ${filter}`} actionLink="/search" />}
+      <p><Link to="/search">Discover more anime</Link></p>
+    </main>
+  );
+}
